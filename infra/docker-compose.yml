@@ -1,0 +1,12 @@
+services:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    image: ${BACKEND_IMAGE}    # sigue usando la variable del .env
+    env_file:
+      - ../.env
+    ports:
+      - "${BACKEND_PORT}:${BACKEND_PORT}"  # sigue usando la variable del .env
+    volumes:
+      - ../backend:/app
