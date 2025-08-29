@@ -14,5 +14,8 @@ RUN pip install --upgrade pip && \
 # Copiar todo el código del backend
 COPY . /app
 
+# Variable de entorno para usar configuración de desarrollo
+ENV DJANGO_SETTINGS_MODULE=mi_proyecto.settings.development
+
 # Comando por defecto para desarrollo
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

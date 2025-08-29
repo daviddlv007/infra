@@ -9,3 +9,8 @@ __pycache__/
 *.log
 *.tmp
 docker-compose.override.yml
+
+
+# Angular / Node.js
+node_modules/
+dist/
