@@ -48,7 +48,7 @@ services:
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - static_volume:/var/www/static
+      - ./nginx/letsencrypt:/var/www/letsencrypt
     entrypoint: /bin/sh -c
     command: >
       "trap exit TERM;
