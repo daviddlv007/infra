@@ -35,6 +35,7 @@ services:
       - static_volume:/var/www/static:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - ./nginx/ssl-params.conf:/etc/nginx/ssl-params.conf:ro
+      - ./nginx/letsencrypt:/var/www/letsencrypt:rw
     ports:
       - "80:80"
       - "443:443"
