@@ -1,54 +1,60 @@
-# stage build
+# -------------------------
+# Stage: builder (compila wheels)
+# -------------------------
 FROM python:3.12-slim AS builder
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
-# instalar dependencias del sistema necesarias (psycopg2-binary o libpq)
+# Dependencias del sistema necesarias solo para compilar ruedas (wheels)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential gcc libpq-dev curl && rm -rf /var/lib/apt/lists/*
 
+# Copiar requirements de producción
 COPY requirements.txt /app/requirements.txt
-RUN pip install --upgrade pip
-RUN pip wheel --wheel-dir=/wheels -r requirements.txt
 
-# stage final
+# Construir wheels reproducibles
+RUN pip install --upgrade pip setuptools wheel \
+ && pip wheel --wheel-dir=/wheels -r /app/requirements.txt
+
+# -------------------------
+# Stage: final (runtime)
+# -------------------------
 FROM python:3.12-slim
-WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+WORKDIR /app
 
-# copiar runtime deps
+# Dependencias del sistema ligeras para runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 && rm -rf /var/lib/apt/lists/*
+    libpq5 ca-certificates && rm -rf /var/lib/apt/lists/*
 
+# Instalar paquetes Python desde los wheels generados (sin internet)
 COPY --from=builder /wheels /wheels
 COPY requirements.txt /app/requirements.txt
-RUN pip install --no-index --find-links=/wheels -r /app/requirements.txt
+RUN pip install --upgrade pip \
+ && pip install --no-index --find-links=/wheels -r /app/requirements.txt \
+ && rm -rf /wheels /root/.cache/pip
 
-# crear usuario no root
-RUN groupadd -r app && useradd -r -g app app
+# Crear usuario no-root y preparar volúmenes
+RUN groupadd -r app && useradd -r -g app app \
+ && mkdir -p /vol/static /vol/media /run/gunicorn \
+ && chown -R app:app /vol /run/gunicorn
 
-# Crear directorios de volúmenes y dar permisos
-RUN mkdir -p /vol/static /vol/media \
-    && chown -R app:app /vol/static /vol/media
-
-# Copiar el código y dar permisos
-COPY . /app
-RUN chown -R app:app /app
-
-# Copiar entrypoint y dar permisos
-COPY entrypoint.sh /app/entrypoint.sh
+# Copiar código y entrypoint como root para setear permisos
+COPY --chown=app:app . /app
+COPY --chown=app:app entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
-# Cambiar a usuario no root
+# Cambiar a usuario no-root
 USER app
 
+# Variables de entorno por defecto (ajustables en runtime)
 ENV DJANGO_SETTINGS_MODULE=mi_proyecto.settings.production
 ENV PYTHONPATH=/app
 
-# Exponer puerto interno que escucha Gunicorn
+# Puerto interno que escucha Gunicorn
 EXPOSE 8000
 
-# Usar entrypoint para automatizar migraciones y collectstatic
+# Entrypoint para migraciones y collectstatic
 ENTRYPOINT ["/app/entrypoint.sh"]
