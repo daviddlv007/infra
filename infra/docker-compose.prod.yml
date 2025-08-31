@@ -1,3 +1,4 @@
+version: "3.8"
 services:
   db:
     image: postgres:15
@@ -24,9 +25,9 @@ services:
 
   frontend:
     image: ghcr.io/daviddlv007/infra/frontend:latest
-    depends_on:
-      - backend
     restart: always
+    # NOTA: no es necesario ejecutar frontend en prod si proxy sirve static desde static_volume.
+    # Lo mantenemos por compatibilidad, pero el deploy copia el contenido al volumen.
 
   proxy:
     image: nginx:stable-alpine
@@ -41,7 +42,6 @@ services:
       - "443:443"
     depends_on:
       - backend
-      - frontend
     restart: always
 
   certbot:
@@ -61,5 +61,8 @@ services:
 
 volumes:
   db_data:
+    name: db_data
   static_volume:
+    name: static_volume
   media_volume:
+    name: media_volume

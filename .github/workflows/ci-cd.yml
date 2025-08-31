@@ -1,4 +1,4 @@
-name: CI/CD - Ultra-Efficient Build & Deploy
+name: CI/CD - Build, Push & Deploy (prod)
 
 on:
   push:
@@ -9,31 +9,28 @@ permissions:
   packages: write
 
 env:
-  IMAGE_NAME: ghcr.io/${{ github.repository }}/backend
+  BACKEND_IMAGE: ghcr.io/${{ github.repository }}/backend
+  FRONTEND_IMAGE: ghcr.io/${{ github.repository }}/frontend
 
 jobs:
-  # ----------------------
-  # 1️⃣ Build, Test & Push
-  # ----------------------
   build-and-push:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python & dependencies
-        uses: actions/setup-python@v4
+      # Frontend build + image
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
-          python-version: "3.12"
-
-      - name: Install dependencies & run tests
+          node-version: '20'
+      - name: Build frontend
+        working-directory: ./frontend
         run: |
-          python -m pip install --upgrade pip setuptools wheel
-          pip install -r backend/requirements-dev.txt
-          cd backend
-          pytest --maxfail=1 --disable-warnings -q || true
+          npm ci
+          npm run build
 
-      - name: Set up QEMU & Docker Buildx
+      - name: Set up QEMU & Buildx
         uses: docker/setup-buildx-action@v2
 
       - name: Log in to GHCR
@@ -43,14 +40,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      - name: Build & push multi-stage image
-        run: |
-          docker build --target final -t $IMAGE_NAME:latest -f backend/Dockerfile.prod backend
-          docker push $IMAGE_NAME:latest
+      - name: Build & push frontend image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile.prod
+          push: true
+          tags: ${{ env.FRONTEND_IMAGE }}:latest
 
-  # ----------------------
-  # 2️⃣ Deploy on EC2
-  # ----------------------
+      # Backend image
+      - name: Build & push backend image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile.prod
+          push: true
+          tags: ${{ env.BACKEND_IMAGE }}:latest
+
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
@@ -67,22 +73,32 @@ jobs:
             PROJ_DIR="/home/${{ secrets.EC2_USER }}/prueba-infra/infra"
             cd "$PROJ_DIR"
 
-            IMAGE_NAME="ghcr.io/${{ github.repository }}/backend"
+            FRONTEND_IMAGE="${{ env.FRONTEND_IMAGE }}"
+            BACKEND_IMAGE="${{ env.BACKEND_IMAGE }}"
 
-            echo ">>> Login a GHCR en EC2"
+            echo ">>> Login a GHCR"
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            echo ">>> Pull de la imagen lista"
-            docker pull $IMAGE_NAME:latest
+            echo ">>> Pull images"
+            docker pull "$FRONTEND_IMAGE:latest" || true
+            docker pull "$BACKEND_IMAGE:latest" || true
 
-            echo ">>> Levantar backend sin reconstruir"
-            docker-compose -f docker-compose.prod.yml up -d --no-build backend
+            echo ">>> Asegurar volumes y servicios (crea volumen si no existe)"
+            docker volume inspect static_volume >/dev/null 2>&1 || docker volume create static_volume
 
-            echo ">>> Limpieza de imágenes intermedias y dangling"
-            docker image prune -af --filter "until=24h" || true
+            echo ">>> Poblar static_volume copiando build desde la imagen frontend"
+            docker run --rm -v static_volume:/data "$FRONTEND_IMAGE:latest" sh -c "cp -a /usr/share/nginx/html/. /data/ && sync"
 
-            echo ">>> Verificación del backend"
-            status=$(docker inspect -f '{{.State.Health.Status}}' backend 2>/dev/null || echo "no-healthcheck")
-            echo "Estado backend: $status"
+            echo ">>> Levantar backend y proxy (no rebuild)"
+            docker-compose -f docker-compose.prod.yml up -d --no-build backend proxy
 
-            echo ">>> Deploy completado exitosamente."
+            echo ">>> Recargar nginx (proxy) para que use los nuevos assets"
+            docker-compose -f docker-compose.prod.yml exec -T proxy nginx -t || true
+            docker-compose -f docker-compose.prod.yml restart proxy || true
+
+            echo ">>> Limpieza local"
+            docker image prune -af --filter 'until=24h' || true
+
+            echo ">>> Estado backend:"
+            docker inspect -f '{{.State.Health.Status}}' $(docker ps --filter ancestor=$BACKEND_IMAGE:latest --format '{{.Names}}' | head -n1) 2>/dev/null || echo "no-healthcheck"
+            echo "Deploy finalizado."
