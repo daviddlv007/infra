@@ -7,18 +7,17 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
-# Dependencias del sistema necesarias para compilar ruedas
+# Dependencias necesarias solo para compilar paquetes
 RUN apt-get update \
- && apt-get install -y --no-install-recommends \
-    build-essential libpq-dev curl gcc \
- && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends \
+       build-essential libpq-dev python3-dev curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copiar requirements y generar wheels (reproducible)
+# Copiar requirements y generar wheels reproducibles
 COPY requirements.txt /app/requirements.txt
-
-# Actualizar pip/setuptools/wheel y generar wheels, incluyendo psycopg[binary]
 RUN pip install --upgrade pip setuptools wheel \
- && pip wheel --wheel-dir=/wheels -r /app/requirements.txt
+    && pip wheel --wheel-dir=/wheels -r /app/requirements.txt \
+    && ls -l /wheels   # para depuración: verifica que psycopg esté aquí
 
 # -------------------------
 # Stage: final (runtime)
@@ -29,25 +28,23 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
-# Dependencias ligeras para runtime
+# Dependencias de runtime ligeras
 RUN apt-get update \
- && apt-get install -y --no-install-recommends \
-    libpq5 ca-certificates \
- && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends \
+       libpq5 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copiar los wheels desde builder y requirements
+# Copiar ruedas desde builder e instalar
 COPY --from=builder /wheels /wheels
 COPY requirements.txt /app/requirements.txt
-
-# Instalar paquetes desde los wheels (offline)
 RUN pip install --upgrade pip \
- && pip install --no-index --find-links=/wheels -r /app/requirements.txt \
- && rm -rf /wheels /root/.cache/pip
+    && pip install --no-index --find-links=/wheels -r /app/requirements.txt \
+    && rm -rf /wheels /root/.cache/pip
 
 # Crear usuario no-root y preparar volúmenes
 RUN groupadd -r app && useradd -r -g app app \
- && mkdir -p /vol/static /vol/media /run/gunicorn \
- && chown -R app:app /vol /run/gunicorn
+    && mkdir -p /vol/static /vol/media /run/gunicorn \
+    && chown -R app:app /vol /run/gunicorn
 
 # Copiar código y entrypoint
 COPY --chown=app:app . /app
@@ -57,11 +54,11 @@ RUN chmod +x /app/entrypoint.sh
 # Cambiar a usuario no-root
 USER app
 
-# Variables de entorno por defecto (ajustar en runtime)
+# Variables de entorno por defecto
 ENV DJANGO_SETTINGS_MODULE=mi_proyecto.settings.production
 ENV PYTHONPATH=/app
 
-# Puerto interno que escucha Gunicorn
+# Puerto interno para Gunicorn
 EXPOSE 8000
 
 # Entrypoint
