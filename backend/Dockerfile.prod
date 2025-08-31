@@ -1,56 +1,64 @@
-# =========================
-# Stage: builder
-# =========================
+# Dockerfile.prod - multi-stage build optimizado para reproducibilidad y runtime mínimo
+
+# -------------------------
+# Stage: builder (compila wheels)
+# -------------------------
 FROM python:3.12-slim AS builder
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
-# Instalar dependencias necesarias para compilar psycopg2
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential libpq-dev curl && rm -rf /var/lib/apt/lists/*
+# Dependencias del sistema necesarias solo para compilar ruedas (wheels)
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+     build-essential libpq-dev curl \
+  && rm -rf /var/lib/apt/lists/*
 
-# Instalar pip y generar wheels de todas las dependencias
-COPY requirements.txt .
-RUN pip install --upgrade pip \
-    && pip wheel --wheel-dir=/wheels -r requirements.txt
+# Copiar requirements y generar wheels (reproducible)
+COPY requirements.txt /app/requirements.txt
+RUN pip install --upgrade pip setuptools wheel \
+ && pip wheel --wheel-dir=/wheels -r /app/requirements.txt
 
-# =========================
+# -------------------------
 # Stage: final (runtime)
-# =========================
+# -------------------------
 FROM python:3.12-slim
-WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+WORKDIR /app
 
-# Instalar solo las librerías de sistema necesarias en runtime
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 && rm -rf /var/lib/apt/lists/*
+# Dependencias de sistema ligeras para runtime (libpq cliente si hace falta)
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+     libpq5 ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 
-# Instalar dependencias de Python desde los wheels generados
+# Instalar paquetes Python desde los wheels generados (sin internet si quieres)
 COPY --from=builder /wheels /wheels
-COPY requirements.txt .
-RUN pip install --no-index --find-links=/wheels -r requirements.txt
+COPY requirements.txt /app/requirements.txt
+RUN pip install --upgrade pip \
+ && pip install --no-index --find-links=/wheels -r /app/requirements.txt \
+ && rm -rf /wheels /root/.cache/pip
 
-# Crear usuario no root y permisos para volúmenes
+# Crear usuario no-root y preparar volúmenes
 RUN groupadd -r app && useradd -r -g app app \
-    && mkdir -p /vol/static /vol/media \
-    && chown -R app:app /vol/static /vol/media
+ && mkdir -p /vol/static /vol/media /run/gunicorn \
+ && chown -R app:app /vol /run/gunicorn
 
-# Copiar código y entrypoint
+# Copiar código como el usuario root para poder setear permisos en una sola operación
 COPY --chown=app:app . /app
-COPY entrypoint.sh /app/entrypoint.sh
+COPY --chown=app:app entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
-# Cambiar a usuario no root
+# Cambiar a usuario no-root
 USER app
 
-# Variables de entorno
+# Variables de entorno por defecto (ajusta en runtime via env vars)
 ENV DJANGO_SETTINGS_MODULE=mi_proyecto.settings.production
 ENV PYTHONPATH=/app
 
-# Exponer puerto interno de Gunicorn
+# Puerto interno que escucha Gunicorn
 EXPOSE 8000
 
-# Entrypoint para automatizar migraciones y collectstatic
+# Entrypoint para migraciones/collectstatic y luego arrancar Gunicorn (gestiona en entrypoint)
 ENTRYPOINT ["/app/entrypoint.sh"]
