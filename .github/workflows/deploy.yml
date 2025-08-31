@@ -1,8 +1,8 @@
-name: CI/CD - build, push to GHCR & deploy to EC2
+name: CI/CD - Build, Push to GHCR & Deploy to EC2
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
 
 permissions:
   contents: read
@@ -57,7 +57,6 @@ jobs:
           script: |
             set -euo pipefail
 
-            # ruta del proyecto en EC2
             PROJ_DIR="/home/${{ secrets.EC2_USER }}/prueba-infra/infra"
             cd "$PROJ_DIR"
 
@@ -65,32 +64,15 @@ jobs:
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
             echo ">>> 1) Pull de imágenes desde GHCR"
-            docker-compose -f docker-compose.prod.yml pull || true
+            docker-compose -f docker-compose.prod.yml pull
 
-            echo ">>> 2) Si NO existe certificado, activar lite y emitir (ACME webroot)"
-            if [ ! -f /etc/letsencrypt/live/softwaredlv.duckdns.org/fullchain.pem ]; then
-              echo "No existe certificado: activando default.lite.conf temporalmente"
-              cp nginx/conf.d_other/default.lite.conf nginx/conf.d_active/default.active.conf
-              docker-compose -f docker-compose.prod.yml up -d proxy
-
-              echo "Emitiendo certificado con certbot (webroot)..."
-              docker-compose -f docker-compose.prod.yml run --rm --entrypoint "" certbot \
-                certbot certonly --webroot -w /var/www/letsencrypt \
-                -d softwaredlv.duckdns.org \
-                --email "${{ secrets.CERTBOT_EMAIL }}" --agree-tos --no-eff-email || true
-            else
-              echo "Certificado ya existente: saltando emisión inicial."
-            fi
-
-            echo ">>> 3) Activar configuración prod (HTTPS) y arrancar todo el stack"
-            cp nginx/conf.d_other/default.prod.conf nginx/conf.d_active/default.active.conf || true
+            echo ">>> 2) Levantar/actualizar servicios (force recreate + pull always)"
             docker-compose -f docker-compose.prod.yml up -d --pull always --force-recreate
 
-            echo ">>> 4) Limpieza de imágenes intermedias"
+            echo ">>> 3) Limpieza de imágenes intermedias"
             docker image prune -f || true
 
-            echo ">>> 5) Verificación de renovación (dry-run, forzando webroot)"
-            docker-compose -f docker-compose.prod.yml run --rm --entrypoint "" certbot \
-              certbot renew --dry-run --webroot -w /var/www/letsencrypt || true
+            echo ">>> 4) Verificación básica: estado de servicios"
+            docker-compose -f docker-compose.prod.yml ps
 
-            echo ">>> Despliegue completado."
+            echo ">>> Deploy completado."
