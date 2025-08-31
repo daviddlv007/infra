@@ -27,7 +27,7 @@ WORKDIR /app
 
 # Dependencias del sistema ligeras para runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 ca-certificates && rm -rf /var/lib/apt/lists/*
+    libpq5 ca-certificates curl && rm -rf /var/lib/apt/lists/*
 
 # Instalar paquetes Python desde los wheels generados (sin internet)
 COPY --from=builder /wheels /wheels
