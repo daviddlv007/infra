@@ -81,7 +81,9 @@ jobs:
 
             echo ">>> 3) Activar configuración prod (HTTPS) y arrancar todo el stack"
             cp nginx/conf.d_other/default.prod.conf nginx/conf.d_active/default.active.conf || true
-            docker-compose -f docker-compose.prod.yml up -d
+
+            # Forzar uso de las imágenes nuevas y recrear contenedores
+            docker-compose -f docker-compose.prod.yml up -d --pull always --force-recreate
 
             echo ">>> 4) Limpieza de imágenes intermedias"
             docker image prune -f || true
