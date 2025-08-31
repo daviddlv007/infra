@@ -1,54 +1,56 @@
-# stage build
+# =========================
+# Stage: builder
+# =========================
 FROM python:3.12-slim AS builder
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
-# instalar dependencias del sistema necesarias (psycopg2-binary o libpq)
+# Instalar dependencias necesarias para compilar psycopg2
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential gcc libpq-dev curl && rm -rf /var/lib/apt/lists/*
+    build-essential libpq-dev curl && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt /app/requirements.txt
-RUN pip install --upgrade pip
-RUN pip wheel --wheel-dir=/wheels -r requirements.txt
+# Instalar pip y generar wheels de todas las dependencias
+COPY requirements.txt .
+RUN pip install --upgrade pip \
+    && pip wheel --wheel-dir=/wheels -r requirements.txt
 
-# stage final
+# =========================
+# Stage: final (runtime)
+# =========================
 FROM python:3.12-slim
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# copiar runtime deps
+# Instalar solo las librerías de sistema necesarias en runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 && rm -rf /var/lib/apt/lists/*
 
+# Instalar dependencias de Python desde los wheels generados
 COPY --from=builder /wheels /wheels
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-index --find-links=/wheels -r /app/requirements.txt
+COPY requirements.txt .
+RUN pip install --no-index --find-links=/wheels -r requirements.txt
 
-# crear usuario no root
-RUN groupadd -r app && useradd -r -g app app
-
-# Crear directorios de volúmenes y dar permisos
-RUN mkdir -p /vol/static /vol/media \
+# Crear usuario no root y permisos para volúmenes
+RUN groupadd -r app && useradd -r -g app app \
+    && mkdir -p /vol/static /vol/media \
     && chown -R app:app /vol/static /vol/media
 
-# Copiar el código y dar permisos
-COPY . /app
-RUN chown -R app:app /app
-
-# Copiar entrypoint y dar permisos
+# Copiar código y entrypoint
+COPY --chown=app:app . /app
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 # Cambiar a usuario no root
 USER app
 
+# Variables de entorno
 ENV DJANGO_SETTINGS_MODULE=mi_proyecto.settings.production
 ENV PYTHONPATH=/app
 
-# Exponer puerto interno que escucha Gunicorn
+# Exponer puerto interno de Gunicorn
 EXPOSE 8000
 
-# Usar entrypoint para automatizar migraciones y collectstatic
+# Entrypoint para automatizar migraciones y collectstatic
 ENTRYPOINT ["/app/entrypoint.sh"]
