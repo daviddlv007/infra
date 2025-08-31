@@ -1,4 +1,4 @@
-name: CI/CD - Build, Push to GHCR & Deploy to EC2
+name: CI/CD - Efficient Pull & Deploy to EC2
 
 on:
   push:
@@ -9,18 +9,20 @@ permissions:
   packages: write
 
 jobs:
-  build-and-push:
+  deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      # 1️⃣ Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
+      # 2️⃣ Setup QEMU y Buildx (para multiarch si fuera necesario)
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
+      # 3️⃣ Login a GHCR
       - name: Log in to GHCR
         uses: docker/login-action@v2
         with:
@@ -28,27 +30,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      - name: Build & push backend
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          push: true
-          tags: ghcr.io/daviddlv007/infra/backend:latest
-
-      - name: Build & push frontend
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
-          push: true
-          tags: ghcr.io/daviddlv007/infra/frontend:latest
-
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy to EC2 via SSH and run compose
+      # 4️⃣ Deploy a EC2 via SSH
+      - name: Deploy to EC2
         uses: appleboy/ssh-action@v0.1.9
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -63,16 +46,36 @@ jobs:
             echo ">>> LOGIN a GHCR en EC2"
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            echo ">>> 1) Pull de imágenes desde GHCR"
-            docker-compose -f docker-compose.prod.yml pull
+            echo ">>> Detectando servicios del docker-compose"
+            services=($(docker-compose -f docker-compose.prod.yml config --services))
 
-            echo ">>> 2) Levantar/actualizar servicios (force recreate + pull always)"
-            docker-compose -f docker-compose.prod.yml up -d --pull always --force-recreate
+            echo ">>> Pull de imágenes (en paralelo, max 4 a la vez)"
+            max_parallel=4
+            count=0
+            for svc in "${services[@]}"; do
+              (
+                echo "Pull: $svc"
+                docker-compose -f docker-compose.prod.yml pull "$svc"
+                echo "Pull terminado: $svc"
+              ) &
+              ((count+=1))
+              if [[ $count -ge $max_parallel ]]; then
+                wait
+                count=0
+              fi
+            done
+            wait
 
-            echo ">>> 3) Limpieza de imágenes intermedias"
-            docker image prune -f || true
+            echo ">>> Levantar servicios (force recreate, pull always)"
+            docker-compose -f docker-compose.prod.yml up -d --pull always --force-recreate "${services[@]}"
 
-            echo ">>> 4) Verificación básica: estado de servicios"
-            docker-compose -f docker-compose.prod.yml ps
+            echo ">>> Limpieza de imágenes intermedias y dangling (solo >24h)"
+            docker image prune -af --filter "until=24h" || true
 
-            echo ">>> Deploy completado."
+            echo ">>> Verificación individual de cada servicio"
+            for svc in "${services[@]}"; do
+              status=$(docker inspect -f '{{.State.Health.Status}}' "${svc}" 2>/dev/null || echo "no-healthcheck")
+              echo "Servicio: $svc, estado: $status"
+            done
+
+            echo ">>> Deploy completado exitosamente."
