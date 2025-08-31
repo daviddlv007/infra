@@ -1,65 +1,54 @@
-# -------------------------
-# Stage: builder (compila wheels)
-# -------------------------
+# stage build
 FROM python:3.12-slim AS builder
-
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
-# Dependencias necesarias solo para compilar paquetes
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-       build-essential libpq-dev python3-dev curl \
-    && rm -rf /var/lib/apt/lists/*
+# instalar dependencias del sistema necesarias (psycopg2-binary o libpq)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential gcc libpq-dev curl && rm -rf /var/lib/apt/lists/*
 
-# Copiar requirements y generar wheels reproducibles
 COPY requirements.txt /app/requirements.txt
-RUN pip install --upgrade pip setuptools wheel \
-    && pip wheel --wheel-dir=/wheels -r /app/requirements.txt \
-    && ls -l /wheels   # para depuración: verifica que psycopg esté aquí
+RUN pip install --upgrade pip
+RUN pip wheel --wheel-dir=/wheels -r requirements.txt
 
-# -------------------------
-# Stage: final (runtime)
-# -------------------------
+# stage final
 FROM python:3.12-slim
-
+WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-WORKDIR /app
 
-# Dependencias de runtime ligeras
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-       libpq5 ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+# copiar runtime deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 && rm -rf /var/lib/apt/lists/*
 
-# Copiar ruedas desde builder e instalar
 COPY --from=builder /wheels /wheels
 COPY requirements.txt /app/requirements.txt
-RUN pip install --upgrade pip \
-    && pip install --no-index --find-links=/wheels -r /app/requirements.txt \
-    && rm -rf /wheels /root/.cache/pip
+RUN pip install --no-index --find-links=/wheels -r /app/requirements.txt
 
-# Crear usuario no-root y preparar volúmenes
-RUN groupadd -r app && useradd -r -g app app \
-    && mkdir -p /vol/static /vol/media /run/gunicorn \
-    && chown -R app:app /vol /run/gunicorn
+# crear usuario no root
+RUN groupadd -r app && useradd -r -g app app
 
-# Copiar código y entrypoint
-COPY --chown=app:app . /app
-COPY --chown=app:app entrypoint.sh /app/entrypoint.sh
+# Crear directorios de volúmenes y dar permisos
+RUN mkdir -p /vol/static /vol/media \
+    && chown -R app:app /vol/static /vol/media
+
+# Copiar el código y dar permisos
+COPY . /app
+RUN chown -R app:app /app
+
+# Copiar entrypoint y dar permisos
+COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
-# Cambiar a usuario no-root
+# Cambiar a usuario no root
 USER app
 
-# Variables de entorno por defecto
 ENV DJANGO_SETTINGS_MODULE=mi_proyecto.settings.production
 ENV PYTHONPATH=/app
 
-# Puerto interno para Gunicorn
+# Exponer puerto interno que escucha Gunicorn
 EXPOSE 8000
 
-# Entrypoint
+# Usar entrypoint para automatizar migraciones y collectstatic
 ENTRYPOINT ["/app/entrypoint.sh"]
