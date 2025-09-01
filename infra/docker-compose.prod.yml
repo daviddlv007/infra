@@ -36,7 +36,7 @@ services:
   frontend:
     image: ghcr.io/daviddlv007/infra/frontend:latest
     restart: always
- # NOTA: Se mantiene frontend aunque proxy sirva static
+ # NOTA: se mantiene frontend aunque proxy sirva static
 
   proxy:
     image: nginx:stable-alpine
