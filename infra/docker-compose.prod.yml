@@ -1,17 +1,25 @@
 version: "3.8"
+
 services:
   db:
     image: postgres:15
-    env_file:
-      - ../.env.production
+    environment:
+      POSTGRES_DB: mi_db               # constante no sensible
+      POSTGRES_USER: postgres          # constante no sensible
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}  # secreto inyectado por CI/CD
     volumes:
       - db_data:/var/lib/postgresql/data
     restart: always
 
   backend:
     image: ghcr.io/daviddlv007/infra/backend:latest
-    env_file:
-      - ../.env.production
+    environment:
+      DJANGO_PROJECT: mi_proyecto
+      DJANGO_APP: mi_app
+      DJANGO_SETTINGS_MODULE: mi_proyecto.settings.production
+      DJANGO_ALLOWED_HOSTS: softwaredlv.duckdns.org
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}   # secreto
+      DATABASE_URL: ${DATABASE_URL}             # secreto
     depends_on:
       - db
     volumes:
@@ -26,8 +34,7 @@ services:
   frontend:
     image: ghcr.io/daviddlv007/infra/frontend:latest
     restart: always
-    # NOTA: no es necesario ejecutar frontend en prod si proxy sirve static desde static_volume.
-    # Lo mantenemos por compatibilidad, pero el deploy copia el contenido al volumen.
+    # NOTA: se mantiene frontend aunque proxy sirva static
 
   proxy:
     image: nginx:stable-alpine
@@ -46,6 +53,8 @@ services:
 
   certbot:
     image: certbot/certbot
+    environment:
+      CERTBOT_EMAIL: ${CERTBOT_EMAIL}  # secreto
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt
       - ./nginx/conf.d:/etc/nginx/conf.d:ro

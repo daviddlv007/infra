@@ -48,7 +48,6 @@ jobs:
           push: true
           tags: ${{ env.FRONTEND_IMAGE }}:latest
 
-      # Backend image
       - name: Build & push backend image
         uses: docker/build-push-action@v4
         with:
@@ -79,26 +78,33 @@ jobs:
             echo ">>> Login a GHCR"
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            echo ">>> Pull images"
+            echo ">>> Pull imágenes"
             docker pull "$FRONTEND_IMAGE:latest" || true
             docker pull "$BACKEND_IMAGE:latest" || true
 
-            echo ">>> Asegurar volumes y servicios (crea volumen si no existe)"
+            echo ">>> Crear static_volume si no existe"
             docker volume inspect static_volume >/dev/null 2>&1 || docker volume create static_volume
 
-            echo ">>> Poblar static_volume copiando build desde la imagen frontend"
+            echo ">>> Poblar static_volume con build del frontend"
             docker run --rm -v static_volume:/data "$FRONTEND_IMAGE:latest" sh -c "cp -a /usr/share/nginx/html/. /data/ && sync"
 
-            echo ">>> Levantar backend y proxy (no rebuild)"
-            docker-compose -f docker-compose.prod.yml up -d --no-build backend proxy
+            echo ">>> Exportar secretos al entorno del deploy"
+            export POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}"
+            export DJANGO_SECRET_KEY="${{ secrets.DJANGO_SECRET_KEY }}"
+            export DATABASE_URL="${{ secrets.DATABASE_URL }}"
+            export CERTBOT_EMAIL="${{ secrets.CERTBOT_EMAIL }}"
 
-            echo ">>> Recargar nginx (proxy) para que use los nuevos assets"
+            echo ">>> Levantar servicios"
+            docker-compose -f docker-compose.prod.yml up -d --no-build db backend proxy certbot
+
+            echo ">>> Recargar proxy"
             docker-compose -f docker-compose.prod.yml exec -T proxy nginx -t || true
             docker-compose -f docker-compose.prod.yml restart proxy || true
 
-            echo ">>> Limpieza local"
+            echo ">>> Limpieza imágenes antiguas"
             docker image prune -af --filter 'until=24h' || true
 
             echo ">>> Estado backend:"
             docker inspect -f '{{.State.Health.Status}}' $(docker ps --filter ancestor=$BACKEND_IMAGE:latest --format '{{.Names}}' | head -n1) 2>/dev/null || echo "no-healthcheck"
-            echo "Deploy finalizado."
+
+            echo ">>> Deploy finalizado."
