@@ -36,8 +36,9 @@ RUN pip install --upgrade pip \
  && pip install --no-index --find-links=/wheels -r /app/requirements.txt \
  && rm -rf /wheels /root/.cache/pip
 
-# Crear usuario no-root y preparar volúmenes
-RUN groupadd -r app && useradd -r -g app app \
+# Crear usuario no-root con UID/GID 1000 para alinear con docker-compose
+RUN groupadd -g 1000 app \
+ && useradd -u 1000 -g 1000 -r -m app \
  && mkdir -p /vol/static /vol/media /run/gunicorn \
  && chown -R app:app /vol /run/gunicorn
 
