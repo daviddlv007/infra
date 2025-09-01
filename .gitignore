@@ -14,3 +14,11 @@ docker-compose.override.yml
 # Angular / Node.js
 node_modules/
 dist/
+
+
+# Terraform
+*.tfstate
+*.tfstate.backup
+*.tfplan
+.terraform/
+crash.log
