@@ -24,6 +24,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+
       - name: Build frontend
         working-directory: ./frontend
         run: |
@@ -91,13 +92,15 @@ jobs:
             echo ">>> Poblar static_volume con build del frontend"
             docker run --rm -v static_volume:/data "$FRONTEND_IMAGE:latest" sh -c "cp -a /usr/share/nginx/html/. /data/ && sync"
 
-            echo ">>> Exportar secretos al entorno del deploy"
-            export POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}"
-            export DJANGO_SECRET_KEY="${{ secrets.DJANGO_SECRET_KEY }}"
-            export DATABASE_URL="${{ secrets.DATABASE_URL }}"
-            export CERTBOT_EMAIL="${{ secrets.CERTBOT_EMAIL }}"
+            echo ">>> Generar archivo .env dinámico"
+            cat > .env <<EOF
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            DJANGO_SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+            CERTBOT_EMAIL=${{ secrets.CERTBOT_EMAIL }}
+            EOF
 
-            echo ">>> Levantar servicios"
+            echo ">>> Levantar servicios con Docker Compose"
             docker-compose -f docker-compose.prod.yml up -d --no-build db backend proxy certbot
 
             echo ">>> Recargar proxy"
