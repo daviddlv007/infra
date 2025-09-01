@@ -4,9 +4,9 @@ services:
   db:
     image: postgres:15
     environment:
-      POSTGRES_DB: mi_db               # constante no sensible
-      POSTGRES_USER: postgres          # constante no sensible
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}  # secreto inyectado por CI/CD
+      POSTGRES_DB: mi_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - db_data:/var/lib/postgresql/data
     restart: always
@@ -18,8 +18,8 @@ services:
       DJANGO_APP: mi_app
       DJANGO_SETTINGS_MODULE: mi_proyecto.settings.production
       DJANGO_ALLOWED_HOSTS: softwaredlv.duckdns.org
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}   # secreto
-      DATABASE_URL: ${DATABASE_URL}             # secreto
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DATABASE_URL: ${DATABASE_URL}
     depends_on:
       - db
     volumes:
@@ -54,7 +54,7 @@ services:
   certbot:
     image: certbot/certbot
     environment:
-      CERTBOT_EMAIL: ${CERTBOT_EMAIL}  # secreto
+      CERTBOT_EMAIL: ${CERTBOT_EMAIL}
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt
       - ./nginx/conf.d:/etc/nginx/conf.d:ro

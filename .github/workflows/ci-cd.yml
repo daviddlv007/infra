@@ -69,8 +69,11 @@ jobs:
           script: |
             set -euo pipefail
 
-            PROJ_DIR="/home/${{ secrets.EC2_USER }}/prueba-infra/infra"
-            cd "$PROJ_DIR"
+            # Actualizar repo infra en EC2
+            cd /home/${{ secrets.EC2_USER }}/prueba-infra
+            git fetch --all
+            git reset --hard origin/main
+            cd infra
 
             FRONTEND_IMAGE="${{ env.FRONTEND_IMAGE }}"
             BACKEND_IMAGE="${{ env.BACKEND_IMAGE }}"
