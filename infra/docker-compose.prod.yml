@@ -1,23 +1,23 @@
 services:
   db:
     image: postgres:15
+    env_file:
+      - .env
     environment:
       POSTGRES_DB: mi_db
-      POSTGRES_USER: ${POSTGRES_USER}  
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - db_data:/var/lib/postgresql/data
     restart: always
 
   backend:
     image: ghcr.io/daviddlv007/infra/backend:latest
+    env_file:
+      - .env
     environment:
       DJANGO_PROJECT: mi_proyecto
       DJANGO_APP: mi_app
       DJANGO_SETTINGS_MODULE: mi_proyecto.settings.production
       DJANGO_ALLOWED_HOSTS: softwaredlv.duckdns.org
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
-      DATABASE_URL: ${DATABASE_URL}
     depends_on:
       - db
     volumes:
@@ -32,7 +32,7 @@ services:
   frontend:
     image: ghcr.io/daviddlv007/infra/frontend:latest
     restart: always
-    # NOTA: Se mantiene frontend aunque proxy sirva static
+ # NOTA: Se mantiene frontend aunque proxy sirva static
 
   proxy:
     image: nginx:stable-alpine
@@ -51,8 +51,8 @@ services:
 
   certbot:
     image: certbot/certbot
-    environment:
-      CERTBOT_EMAIL: ${CERTBOT_EMAIL}
+    env_file:
+      - .env
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
