@@ -18,6 +18,10 @@ services:
       DJANGO_APP: mi_app
       DJANGO_SETTINGS_MODULE: mi_proyecto.settings.production
       DJANGO_ALLOWED_HOSTS: softwaredlv.duckdns.org
+      POSTGRES_DB: mi_db
+      POSTGRES_USER: postgres
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
     depends_on:
       - db
     volumes:
