@@ -29,8 +29,9 @@ services:
       - media_volume:/vol/media
     user: "1000:1000" 
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      test: ["CMD", "curl", "-f", "-H", "Host: softwaredlv.duckdns.org", "http://localhost:8000/healthz/"]
       interval: 30s
+      timeout: 10s
       retries: 3
     restart: always
 
