@@ -1,5 +1,5 @@
 #!/bin/sh
-set -e  # detenerse ante cualquier error
+set -e  # Detenerse ante cualquier error
 
 echo "Iniciando contenedor de Django..."
 
