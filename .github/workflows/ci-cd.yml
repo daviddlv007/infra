@@ -96,6 +96,7 @@ jobs:
             cat > .env <<EOF
             POSTGRES_USER=${{ secrets.POSTGRES_USER }}
             POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/mi_db
             DJANGO_SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}
             CERTBOT_EMAIL=${{ secrets.CERTBOT_EMAIL }}
             EOF
