@@ -4,8 +4,8 @@ FROM python:3.12-slim
 # Establecer directorio de trabajo
 WORKDIR /app
 
-# Copiar requirements.txt si existiera
-COPY requirements.txt /app/requirements.txt
+# Copiar solo requirements para aprovechar cache
+COPY requirements-dev.txt /app/requirements-dev.txt
 
 # Instalar dependencias de Python
 RUN pip install --upgrade pip && \

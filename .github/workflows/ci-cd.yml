@@ -90,7 +90,8 @@ jobs:
             docker volume inspect static_volume >/dev/null 2>&1 || docker volume create static_volume
 
             echo ">>> Poblar static_volume con build del frontend"
-            docker run --rm -v static_volume:/data "$FRONTEND_IMAGE:latest" sh -c "cp -a /usr/share/nginx/html/. /data/ && sync"
+            docker run --rm -v static_volume:/data "$FRONTEND_IMAGE:latest" \
+             sh -c "cp -a /usr/share/nginx/html/. /data/ && chown -R 1000:1000 /data || true && sync"
 
             echo ">>> Generar archivo .env dinámico"
             echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" >> .env

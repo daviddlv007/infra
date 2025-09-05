@@ -1,22 +1,34 @@
-# Generales:
-
 ENV_FILE=../.env
+COMPOSE_FILE=docker-compose.dev.yml
+COMPOSE_CMD=docker-compose -f $(COMPOSE_FILE) --env-file $(ENV_FILE)
 
+include ../.env
+export
+
+# Levanta todos los contenedores en modo desarrollo
 up:
-	docker-compose --env-file $(ENV_FILE) up -d --build
+	$(COMPOSE_CMD) up -d --build
 
+# Detiene y elimina contenedores del entorno dev
 down:
-	docker-compose --env-file $(ENV_FILE) down
+	$(COMPOSE_CMD) down
 
+# Muestra logs en tiempo real de todos los contenedores
 logs:
-	docker-compose --env-file $(ENV_FILE) logs -f
+	$(COMPOSE_CMD) logs -f
 
-
-# Backend:
+# Abre un shell interactivo en el contenedor del backend
 run-backend:
-	docker-compose --env-file $(ENV_FILE) run --rm backend bash
+	$(COMPOSE_CMD) run --rm backend bash
 
-
-#Frontend:
+# Abre un shell interactivo en el contenedor del frontend
 run-frontend:
-	docker-compose --env-file $(ENV_FILE) run --rm frontend bash
+	$(COMPOSE_CMD) run --rm frontend bash
+
+# Reinicia todo el entorno
+restart: down up
+
+# Imprime URLs de desarrollo
+show-urls:
+	@echo "Frontend: http://localhost:$(FRONTEND_PORT)"
+	@echo "Backend:  http://localhost:$(BACKEND_PORT)/admin/"

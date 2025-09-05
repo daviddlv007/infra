@@ -35,11 +35,6 @@ services:
       retries: 3
     restart: always
 
-  frontend:
-    image: ghcr.io/daviddlv007/infra/frontend:latest
-    restart: always
- # NOTA: Se mantiene frontend aunque proxy sirva static
-
   proxy:
     image: nginx:stable-alpine
     volumes:
