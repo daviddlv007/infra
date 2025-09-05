@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential gcc libpq-dev curl && rm -rf /var/lib/apt/lists/*
 
 # Copiar requirements-prod de producción
-COPY requirements-prod.txt /app/requirements-prod.txt
+COPY requirements-base.txt requirements-prod.txt /app/
 
 # Construir wheels reproducibles
 RUN pip install --upgrade pip setuptools wheel \
@@ -31,7 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Instalar paquetes Python desde los wheels generados (sin internet)
 COPY --from=builder /wheels /wheels
-COPY requirements-prod.txt /app/requirements-prod.txt
+COPY requirements-base.txt requirements-prod.txt /app/
 RUN pip install --upgrade pip \
  && pip install --no-index --find-links=/wheels -r /app/requirements-prod.txt \
  && rm -rf /wheels /root/.cache/pip
