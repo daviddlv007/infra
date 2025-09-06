@@ -37,19 +37,23 @@ services:
 
   proxy:
     image: nginx:stable-alpine
+    environment:
+      - DOMAIN=softwaredlv.duckdns.org
     volumes:
-      - ./nginx/conf.d_active:/etc/nginx/conf.d:ro
+      - ./nginx/templates:/etc/nginx/templates:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:rw
       - static_volume:/var/www/static:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - ./nginx/ssl-params.conf:/etc/nginx/ssl-params.conf:ro
       - ./nginx/letsencrypt:/var/www/letsencrypt:rw
+      - ./nginx/entrypoint.sh:/entrypoint.sh:ro
     ports:
       - "80:80"
       - "443:443"
     depends_on:
       - backend
-    restart: always
-
+    entrypoint: ["/entrypoint.sh"]
+  
   certbot:
     image: certbot/certbot
     env_file:
